@@ -1,0 +1,6 @@
+{
+  "name": "MediaPipe 무릎 관절 분석 & 디지털 트윈",
+  "description": "MediaPipe Pose 기반 무릎 및 어깨 관절 가동범위(ROM) 추정, 몸통 보상동작 감지 및 Mini Digital Twin 재활 모니터링 웹앱",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
