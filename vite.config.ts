@@ -5,6 +5,9 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
+    // Use the repository subpath only for GitHub Pages; keep root hosting
+    // unchanged for Render and local development.
+    base: process.env.GITHUB_PAGES === 'true' ? '/-2/' : '/',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
