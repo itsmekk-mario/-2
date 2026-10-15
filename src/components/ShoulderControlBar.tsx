@@ -110,6 +110,7 @@ export const ShoulderControlBar: React.FC<ShoulderControlBarProps> = ({
         </div>
       </div>
 
+      {shoulderConfig.targetROM !== null && shoulderConfig.maximumAllowedROM !== null && shoulderConfig.targetROM > shoulderConfig.maximumAllowedROM && <p role="alert" className="rounded-xl bg-red-50 p-3 text-xs text-red-700">목표 ROM이 최대 허용각보다 큽니다. 목표 또는 허용각 설정을 확인하세요.</p>}
       {/* Bottom Row: User-Defined Target ROM & Maximum Allowed ROM & Rep Counter Toggle (Requirements 14, 21) */}
       <div className="pt-3 border-t border-[#F0F0E8] grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
         {/* Target ROM input */}
@@ -129,6 +130,7 @@ export const ShoulderControlBar: React.FC<ShoulderControlBarProps> = ({
               min="10"
               max="180"
               step="5"
+              aria-label="어깨 목표 ROM"
               placeholder="예: 90"
               value={shoulderConfig.targetROM ?? ''}
               onChange={(e) => handleTargetChange(e.target.value)}
@@ -155,6 +157,7 @@ export const ShoulderControlBar: React.FC<ShoulderControlBarProps> = ({
               min="10"
               max="180"
               step="5"
+              aria-label="어깨 최대 허용 ROM"
               placeholder="예: 100"
               value={shoulderConfig.maximumAllowedROM ?? ''}
               onChange={(e) => handleMaxAllowedChange(e.target.value)}
@@ -184,7 +187,7 @@ export const ShoulderControlBar: React.FC<ShoulderControlBarProps> = ({
             ) : (
               <Square className="w-4 h-4 text-[#8A8A70]" />
             )}
-            <span>반복 운동 카운트 (Rep Counter)</span>
+            <span>반복 운동 카운트 (목표 허용오차 2°)</span>
           </button>
         </div>
       </div>

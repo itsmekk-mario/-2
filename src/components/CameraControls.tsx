@@ -41,15 +41,15 @@ export const CameraControls: React.FC<CameraControlsProps> = ({
     const file = e.target.files?.[0];
     if (file) {
       onFileUpload(file);
-      setSourceMode('video_file');
+      e.target.value = '';
     }
   };
 
   return (
     <div className="bg-white border border-[#DEDECF] rounded-[24px] p-4 sm:p-5 shadow-xs">
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div className="flex flex-col xl:flex-row xl:flex-wrap xl:items-center justify-between gap-4">
         {/* Left: Source Mode Selector */}
-        <div className="space-y-1.5">
+        <div className="space-y-1.5 shrink-0">
           <label className="text-[11px] font-bold uppercase tracking-wider text-[#8A8A70] flex items-center space-x-1.5">
             <span>입력 소스</span>
           </label>
@@ -101,7 +101,7 @@ export const CameraControls: React.FC<CameraControlsProps> = ({
 
         {/* Center: Camera Settings (Front/Back & Mirror Toggle for Realtime Camera) */}
         {sourceMode === 'realtime_camera' && setFacingMode && setIsMirrored && (
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 shrink-0">
             <label className="text-[11px] font-bold uppercase tracking-wider text-[#8A8A70]">
               카메라 설정
             </label>
@@ -132,7 +132,7 @@ export const CameraControls: React.FC<CameraControlsProps> = ({
         )}
 
         {/* Right: Execution Actions (Start/Stop, Reset, Audio) */}
-        <div className="space-y-1.5">
+        <div className="space-y-1.5 shrink-0">
           <label className="text-[11px] font-bold uppercase tracking-wider text-[#8A8A70]">
             제어 액션
           </label>
@@ -146,7 +146,7 @@ export const CameraControls: React.FC<CameraControlsProps> = ({
               }`}
             >
               {isProcessing ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-              <span>{isProcessing ? '측정 일시정지' : '실시간 측정 시작'}</span>
+              <span>{isProcessing ? '측정 일시정지' : '측정 재개'}</span>
             </button>
 
             <button

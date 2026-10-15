@@ -11,7 +11,7 @@ import {
   SessionMaxROM,
   TrackingQuality,
   MeasurementQuality,
-} from '../types';
+} from "../types";
 
 /**
  * Global Configuration for Angle Calculations, State Machines & Thresholds
@@ -23,14 +23,14 @@ export const CONFIG = {
 
   knee: {
     standingFlexion: 20, // In degrees: <= 20° considered standing/extended
-    bentFlexion: 60,     // In degrees: >= 60° considered fully bent/squat bottom
+    bentFlexion: 60, // In degrees: >= 60° considered fully bent/squat bottom
     asymmetryThreshold: 15,
   },
 
   shoulder: {
     torsoCompensationThreshold: 12, // degrees of trunk lateral tilt to flag compensation
-    restAngle: 25,                  // <= 25° considered resting position
-    raisingThreshold: 35,           // starting to raise arm
+    restAngle: 25, // <= 25° considered resting position
+    raisingThreshold: 35, // starting to raise arm
     defaultTargetROM: null as number | null,
     defaultMaxAllowedROM: null as number | null,
   },
@@ -44,7 +44,7 @@ export const CONFIG = {
  * Includes NaN protection and 0-length guards
  */
 export function calculateAngle(a: Landmark, b: Landmark, c: Landmark): number {
-  if (!a || !b || !c) return 0;
+  if (!isLandmarkReliable([a, b, c], 0)) return NaN;
 
   const v1 = { x: a.x - b.x, y: a.y - b.y, z: (a.z ?? 0) - (b.z ?? 0) };
   const v2 = { x: c.x - b.x, y: c.y - b.y, z: (c.z ?? 0) - (b.z ?? 0) };
@@ -54,7 +54,7 @@ export function calculateAngle(a: Landmark, b: Landmark, c: Landmark): number {
   const mag2 = Math.hypot(v2.x, v2.y, v2.z);
 
   if (mag1 < 1e-6 || mag2 < 1e-6) {
-    return 0;
+    return NaN;
   }
 
   let cosAngle = dot / (mag1 * mag2);
@@ -72,7 +72,7 @@ export function calculateAngle(a: Landmark, b: Landmark, c: Landmark): number {
 export function calculateKneeFlexionAngle(
   hip: Landmark,
   knee: Landmark,
-  ankle: Landmark
+  ankle: Landmark,
 ): { flexion: number; internal: number } {
   const internal = calculateAngle(hip, knee, ankle);
   const flexion = Math.max(0, 180 - internal);
@@ -81,16 +81,16 @@ export function calculateKneeFlexionAngle(
 
 /**
  * Shoulder Flexion Angle
- * Measured in sagittal plane (arm forward & upward)
+ * 3D upper-arm/trunk angle during instructed forward arm elevation.
  * Uses SHOULDER -> HIP (trunk vector) and SHOULDER -> ELBOW (upper arm vector)
  * Naturally down at side ≈ 0°, raising arm forward & up increases angle up to ~180°
  */
 export function calculateShoulderFlexion(
   shoulder: Landmark,
   elbow: Landmark,
-  hip: Landmark
+  hip: Landmark,
 ): number {
-  if (!shoulder || !elbow || !hip) return 0;
+  if (!shoulder || !elbow || !hip) return NaN;
   // Angle between trunk vector (Shoulder -> Hip) and arm vector (Shoulder -> Elbow)
   const angle = calculateAngle(hip, shoulder, elbow);
   return Math.max(0, Math.min(180, angle));
@@ -98,31 +98,18 @@ export function calculateShoulderFlexion(
 
 /**
  * Shoulder Abduction Angle
- * Measured in frontal/coronal plane (arm raised laterally to side)
+ * 3D upper-arm/trunk angle during instructed lateral arm elevation.
+ * This does not independently classify the anatomical movement plane.
  * Uses SHOULDER -> HIP and SHOULDER -> ELBOW
  * Arm at side ≈ 0°, arm horizontal ≈ 90°, arm overhead ≈ 180°
  */
 export function calculateShoulderAbduction(
   shoulder: Landmark,
   elbow: Landmark,
-  hip: Landmark
+  hip: Landmark,
 ): number {
-  if (!shoulder || !elbow || !hip) return 0;
-  // 2D projection on coronal plane gives stable abduction angle
-  const trunkV = { x: hip.x - shoulder.x, y: hip.y - shoulder.y };
-  const armV = { x: elbow.x - shoulder.x, y: elbow.y - shoulder.y };
-
-  const dot = trunkV.x * armV.x + trunkV.y * armV.y;
-  const magT = Math.hypot(trunkV.x, trunkV.y);
-  const magA = Math.hypot(armV.x, armV.y);
-
-  if (magT < 1e-6 || magA < 1e-6) return 0;
-
-  let cosAngle = dot / (magT * magA);
-  cosAngle = Math.max(-1, Math.min(1, cosAngle));
-  const angle = (Math.acos(cosAngle) * 180) / Math.PI;
-
-  return Math.max(0, Math.min(180, angle));
+  if (!shoulder || !elbow || !hip) return NaN;
+  return calculateAngle(hip, shoulder, elbow);
 }
 
 /**
@@ -132,7 +119,7 @@ export function calculateShoulderAbduction(
 export function smoothAngle(
   current: number,
   previous: number | null,
-  factor = CONFIG.smoothingFactor
+  factor = CONFIG.smoothingFactor,
 ): number {
   if (previous === null || isNaN(previous)) {
     return current;
@@ -145,51 +132,49 @@ export function smoothAngle(
  */
 export function isLandmarkReliable(
   landmarks: (Landmark | undefined)[],
-  threshold = CONFIG.visibilityThreshold
+  threshold = CONFIG.visibilityThreshold,
 ): boolean {
   if (!landmarks || landmarks.length === 0) return false;
   return landmarks.every(
     (lm) =>
       lm !== undefined &&
       lm !== null &&
-      (lm.visibility === undefined || lm.visibility >= threshold)
+      Number.isFinite(lm.x) &&
+      Number.isFinite(lm.y) &&
+      Number.isFinite(lm.z) &&
+      (lm.visibility === undefined ||
+        (Number.isFinite(lm.visibility) && lm.visibility >= threshold)),
   );
 }
 
 /**
- * Detects lateral torso compensation (trunk tilt) during arm raising
- * Compares the shoulder-to-shoulder angle and hip-to-hip angle against horizontal
+ * Detects trunk lean during arm raising using the metric 3D centerline.
  */
 export function detectTorsoCompensation(
   leftShoulder: Landmark,
   rightShoulder: Landmark,
   leftHip: Landmark,
   rightHip: Landmark,
-  threshold = CONFIG.shoulder.torsoCompensationThreshold
+  threshold = CONFIG.shoulder.torsoCompensationThreshold,
 ): TorsoCompensationInfo {
   if (!leftShoulder || !rightShoulder || !leftHip || !rightHip) {
     return { isCompensated: false, tiltAngle: 0, message: null };
   }
 
-  // Calculate shoulder line tilt angle against horizontal
-  const dx = rightShoulder.x - leftShoulder.x;
-  const dy = rightShoulder.y - leftShoulder.y;
-  const shoulderTiltRad = Math.atan2(Math.abs(dy), Math.abs(dx));
-  const shoulderTiltDeg = (shoulderTiltRad * 180) / Math.PI;
-
-  // Calculate hip line tilt angle
-  const hdx = rightHip.x - leftHip.x;
-  const hdy = rightHip.y - leftHip.y;
-  const hipTiltRad = Math.atan2(Math.abs(hdy), Math.abs(hdx));
-  const hipTiltDeg = (hipTiltRad * 180) / Math.PI;
-
-  const maxTilt = Math.max(shoulderTiltDeg, hipTiltDeg);
+  // Metric world coordinates: measure the trunk centerline against vertical.
+  // Shoulder-line slope alone falsely flags shoulder elevation and side views.
+  const dx = (leftShoulder.x + rightShoulder.x - leftHip.x - rightHip.x) / 2;
+  const dy = (leftShoulder.y + rightShoulder.y - leftHip.y - rightHip.y) / 2;
+  const dz = (leftShoulder.z + rightShoulder.z - leftHip.z - rightHip.z) / 2;
+  const maxTilt =
+    (Math.atan2(Math.hypot(dx, dz), Math.abs(dy)) * 180) / Math.PI;
 
   if (maxTilt > threshold) {
     return {
       isCompensated: true,
       tiltAngle: maxTilt,
-      message: '몸통 기울임이 감지되었습니다. 가능하면 몸통을 고정하고 다시 측정하세요.',
+      message:
+        "몸통 기울임이 감지되었습니다. 가능하면 몸통을 고정하고 다시 측정하세요.",
     };
   }
 
@@ -206,15 +191,15 @@ export function detectTorsoCompensation(
 export function evaluateMeasurementQuality(
   trackingQuality: TrackingQuality,
   torsoCompensated: boolean,
-  landmarksVisible: boolean
+  landmarksVisible: boolean,
 ): MeasurementQuality {
-  if (trackingQuality === 'LOST' || !landmarksVisible) {
-    return 'POOR';
+  if (trackingQuality === "LOST" || !landmarksVisible) {
+    return "POOR";
   }
-  if (trackingQuality === 'LOW CONFIDENCE' || torsoCompensated) {
-    return 'FAIR';
+  if (trackingQuality === "LOW CONFIDENCE" || torsoCompensated) {
+    return "FAIR";
   }
-  return 'GOOD';
+  return "GOOD";
 }
 
 /**
@@ -224,7 +209,7 @@ export function updateKneeMovementState(
   currentState: KneeMovementState,
   leftFlexion: number,
   rightFlexion: number,
-  config = CONFIG.knee
+  config = CONFIG.knee,
 ): { nextState: KneeMovementState; repCompleted: boolean } {
   const avgFlexion = (leftFlexion + rightFlexion) / 2;
   const { standingFlexion, bentFlexion } = config;
@@ -233,26 +218,26 @@ export function updateKneeMovementState(
   let repCompleted = false;
 
   switch (currentState) {
-    case 'STANDING':
+    case "STANDING":
       if (avgFlexion > standingFlexion + 5) {
-        nextState = 'BENDING';
+        nextState = "BENDING";
       }
       break;
-    case 'BENDING':
+    case "BENDING":
       if (avgFlexion >= bentFlexion) {
-        nextState = 'BOTTOM';
+        nextState = "BOTTOM";
       } else if (avgFlexion <= standingFlexion) {
-        nextState = 'STANDING';
+        nextState = "STANDING";
       }
       break;
-    case 'BOTTOM':
+    case "BOTTOM":
       if (avgFlexion < bentFlexion - 8) {
-        nextState = 'RISING';
+        nextState = "RISING";
       }
       break;
-    case 'RISING':
+    case "RISING":
       if (avgFlexion <= standingFlexion + 3) {
-        nextState = 'STANDING';
+        nextState = "STANDING";
         repCompleted = true;
       }
       break;
@@ -268,35 +253,38 @@ export function updateShoulderMovementState(
   currentState: ShoulderMovementState,
   currentAngle: number,
   targetROM: number | null,
-  config = CONFIG.shoulder
+  config = CONFIG.shoulder,
 ): { nextState: ShoulderMovementState; repCompleted: boolean } {
-  const restThreshold = config.restAngle;
-  const targetThreshold = targetROM ? Math.max(targetROM - 10, 45) : 80;
+  const target = targetROM ?? 80;
+  const restThreshold = Math.min(config.restAngle, target * 0.25);
+  // Two-degree tolerance covers estimator noise and smoothing at the peak.
+  const targetThreshold = target - Math.min(2, target * 0.05);
+  const hysteresis = Math.min(10, targetThreshold * 0.2);
 
   let nextState = currentState;
   let repCompleted = false;
 
   switch (currentState) {
-    case 'REST':
-      if (currentAngle > restThreshold + 5) {
-        nextState = 'RAISING';
+    case "REST":
+      if (currentAngle > restThreshold + Math.min(5, target * 0.1)) {
+        nextState = "RAISING";
       }
       break;
-    case 'RAISING':
+    case "RAISING":
       if (currentAngle >= targetThreshold) {
-        nextState = 'TARGET';
+        nextState = "TARGET";
       } else if (currentAngle <= restThreshold) {
-        nextState = 'REST';
+        nextState = "REST";
       }
       break;
-    case 'TARGET':
-      if (currentAngle < targetThreshold - 10) {
-        nextState = 'LOWERING';
+    case "TARGET":
+      if (currentAngle < targetThreshold - hysteresis) {
+        nextState = "LOWERING";
       }
       break;
-    case 'LOWERING':
-      if (currentAngle <= restThreshold + 5) {
-        nextState = 'REST';
+    case "LOWERING":
+      if (currentAngle <= restThreshold) {
+        nextState = "REST";
         repCompleted = true;
       }
       break;
@@ -308,7 +296,10 @@ export function updateShoulderMovementState(
 /**
  * Update Repetition Count
  */
-export function updateRepCount(currentCount: number, repCompleted: boolean): number {
+export function updateRepCount(
+  currentCount: number,
+  repCompleted: boolean,
+): number {
   return repCompleted ? currentCount + 1 : currentCount;
 }
 
@@ -318,7 +309,7 @@ export function updateRepCount(currentCount: number, repCompleted: boolean): num
 export function updateSessionMaxROM(
   currentLeft: number,
   currentRight: number,
-  prevMax: SessionMaxROM
+  prevMax: SessionMaxROM,
 ): SessionMaxROM {
   return {
     leftMax: Math.max(prevMax.leftMax, currentLeft),
@@ -331,7 +322,7 @@ export function updateSessionMaxROM(
  * Strictly Non-Diagnostic & Descriptive (Requirement 8 & 15)
  */
 export function generateFeedback(params: {
-  majorMode: 'knee' | 'shoulder';
+  majorMode: "knee" | "shoulder";
   trackingQuality: TrackingQuality;
   angles: JointAngles | null;
   kneeState?: KneeMovementState;
@@ -339,7 +330,7 @@ export function generateFeedback(params: {
   shoulderConfig?: ShoulderUserConfig;
   torsoCompensation?: TorsoCompensationInfo;
   operatedSide?: OperatedSide;
-}): { message: string; alertLevel: 'normal' | 'warning' | 'alert' } {
+}): { message: string; alertLevel: "normal" | "warning" | "alert" } {
   const {
     majorMode,
     trackingQuality,
@@ -348,80 +339,89 @@ export function generateFeedback(params: {
     shoulderState,
     shoulderConfig,
     torsoCompensation,
-    operatedSide = 'none',
+    operatedSide = "none",
   } = params;
 
-  if (trackingQuality === 'LOST') {
+  if (trackingQuality === "LOST") {
     return {
-      message: '신체가 충분히 보이도록 카메라 위치와 거리를 조정해주세요.',
-      alertLevel: 'alert',
+      message: "신체가 충분히 보이도록 카메라 위치와 거리를 조정해주세요.",
+      alertLevel: "alert",
     };
   }
 
-  if (trackingQuality === 'LOW CONFIDENCE') {
+  if (trackingQuality === "LOW CONFIDENCE") {
     return {
-      message: '관절 인식이 불안정합니다. 조명을 밝히고 신체 전체가 나오도록 해주세요.',
-      alertLevel: 'warning',
+      message:
+        "관절 인식이 불안정합니다. 조명을 밝히고 신체 전체가 나오도록 해주세요.",
+      alertLevel: "warning",
     };
   }
 
   if (!angles) {
-    return { message: '관절 위치를 추정하는 중입니다...', alertLevel: 'normal' };
+    return {
+      message: "관절 위치를 추정하는 중입니다...",
+      alertLevel: "normal",
+    };
   }
 
   // 1. Torso Compensation Check (for Shoulder mode)
-  if (majorMode === 'shoulder' && torsoCompensation?.isCompensated) {
+  if (majorMode === "shoulder" && torsoCompensation?.isCompensated) {
     return {
-      message: torsoCompensation.message || '몸통 기울임이 감지되었습니다. 몸통을 고정하고 다시 측정하세요.',
-      alertLevel: 'warning',
+      message:
+        torsoCompensation.message ||
+        "몸통 기울임이 감지되었습니다. 몸통을 고정하고 다시 측정하세요.",
+      alertLevel: "warning",
     };
   }
 
   // 2. Knee Mode Feedback
-  if (majorMode === 'knee') {
+  if (majorMode === "knee") {
     if (angles.asymmetry >= CONFIG.knee.asymmetryThreshold) {
       return {
         message: `좌우 무릎 움직임 차이가 큽니다 (${angles.asymmetry.toFixed(1)}°). 균형에 유의하세요.`,
-        alertLevel: 'warning',
+        alertLevel: "warning",
       };
     }
 
-    if (kneeState === 'BENDING' && (angles.leftKneeFlexion + angles.rightKneeFlexion) / 2 < 45) {
+    if (
+      kneeState === "BENDING" &&
+      (angles.leftKneeFlexion + angles.rightKneeFlexion) / 2 < 45
+    ) {
       return {
-        message: '무릎을 조금 더 굽혀주세요.',
-        alertLevel: 'normal',
+        message: "무릎을 조금 더 굽혀주세요.",
+        alertLevel: "normal",
       };
     }
 
-    if (kneeState === 'BOTTOM') {
+    if (kneeState === "BOTTOM") {
       return {
-        message: '목표 굴곡에 도달했습니다. 천천히 다시 일어서세요.',
-        alertLevel: 'normal',
+        message: "목표 굴곡에 도달했습니다. 천천히 다시 일어서세요.",
+        alertLevel: "normal",
       };
     }
 
-    if (kneeState === 'RISING') {
+    if (kneeState === "RISING") {
       return {
-        message: '무릎을 끝까지 펴주세요.',
-        alertLevel: 'normal',
+        message: "무릎을 끝까지 펴주세요.",
+        alertLevel: "normal",
       };
     }
 
     return {
-      message: '정상적으로 추적되고 있습니다. 안정적인 속도를 유지하세요.',
-      alertLevel: 'normal',
+      message: "정상적으로 추적되고 있습니다. 안정적인 속도를 유지하세요.",
+      alertLevel: "normal",
     };
   }
 
   // 3. Shoulder Mode Feedback
-  if (majorMode === 'shoulder') {
+  if (majorMode === "shoulder") {
     // Focus on operated side if specified, otherwise max of both
     const relevantAngle =
-      operatedSide === 'left'
+      operatedSide === "left"
         ? angles.currentLeft
-        : operatedSide === 'right'
-        ? angles.currentRight
-        : Math.max(angles.currentLeft, angles.currentRight);
+        : operatedSide === "right"
+          ? angles.currentRight
+          : Math.max(angles.currentLeft, angles.currentRight);
 
     const { targetROM, maximumAllowedROM } = shoulderConfig || {};
 
@@ -429,14 +429,15 @@ export function generateFeedback(params: {
     if (maximumAllowedROM !== null && maximumAllowedROM !== undefined) {
       if (relevantAngle > maximumAllowedROM) {
         return {
-          message: '설정된 가동범위를 초과했습니다. 동작을 중지하고 설정값을 확인하세요.',
-          alertLevel: 'alert',
+          message:
+            "설정된 가동범위를 초과했습니다. 동작을 중지하고 설정값을 확인하세요.",
+          alertLevel: "alert",
         };
       }
       if (relevantAngle >= maximumAllowedROM - 5) {
         return {
-          message: '설정한 가동범위 제한에 근접했습니다.',
-          alertLevel: 'warning',
+          message: "설정한 가동범위 제한에 근접했습니다.",
+          alertLevel: "warning",
         };
       }
     }
@@ -445,27 +446,28 @@ export function generateFeedback(params: {
     if (targetROM !== null && targetROM !== undefined) {
       if (relevantAngle >= targetROM - 3 && relevantAngle <= targetROM + 5) {
         return {
-          message: '설정된 목표 범위에 도달했습니다.',
-          alertLevel: 'normal',
+          message: "설정된 목표 범위에 도달했습니다.",
+          alertLevel: "normal",
         };
       }
     }
 
-    if (shoulderState === 'RAISING') {
+    if (shoulderState === "RAISING") {
       return {
-        message: '팔을 부드럽게 올리고 있습니다. 통증이 없는 범위 내에서 진행하세요.',
-        alertLevel: 'normal',
+        message:
+          "팔을 부드럽게 올리고 있습니다. 통증이 없는 범위 내에서 진행하세요.",
+        alertLevel: "normal",
       };
     }
 
     return {
-      message: '정상적으로 추적되고 있습니다.',
-      alertLevel: 'normal',
+      message: "정상적으로 추적되고 있습니다.",
+      alertLevel: "normal",
     };
   }
 
   return {
-    message: '정상적으로 추적되고 있습니다.',
-    alertLevel: 'normal',
+    message: "정상적으로 추적되고 있습니다.",
+    alertLevel: "normal",
   };
 }

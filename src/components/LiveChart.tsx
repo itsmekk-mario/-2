@@ -68,7 +68,7 @@ export const LiveChart: React.FC<LiveChartProps> = ({
       <div className="w-full h-56 sm:h-64">
         {chartData.length === 0 ? (
           <div className="w-full h-full bg-[#FDFDFB] rounded-2xl border border-[#F0F0E8] flex items-center justify-center text-[#8A8A70] text-xs font-mono">
-            카메라가 활성화되면 실시간 각도 궤적이 시각화됩니다.
+            유효한 측정값이 기록되면 각도 변화가 표시됩니다.
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
@@ -76,13 +76,15 @@ export const LiveChart: React.FC<LiveChartProps> = ({
               <CartesianGrid strokeDasharray="3 3" stroke="#E8E8DF" />
               <XAxis
                 dataKey="time"
+                type="number"
+                domain={["dataMin", "dataMax"]}
                 stroke="#8A8A70"
                 tickFormatter={(val) => `${val.toFixed(0)}s`}
                 tick={{ fontSize: 10 }}
               />
               <YAxis
                 stroke="#8A8A70"
-                domain={[0, majorMode === 'knee' ? 140 : 180]}
+                domain={[0, majorMode === 'knee' ? 160 : 180]}
                 tickFormatter={(val) => `${val}°`}
                 tick={{ fontSize: 10 }}
               />
@@ -127,7 +129,7 @@ export const LiveChart: React.FC<LiveChartProps> = ({
               )}
 
               <Line
-                type="monotone"
+                type="linear"
                 dataKey="leftAngle"
                 name={leftLabel}
                 stroke="#FF6321"
@@ -136,7 +138,7 @@ export const LiveChart: React.FC<LiveChartProps> = ({
                 isAnimationActive={false}
               />
               <Line
-                type="monotone"
+                type="linear"
                 dataKey="rightAngle"
                 name={rightLabel}
                 stroke="#3E5C38"

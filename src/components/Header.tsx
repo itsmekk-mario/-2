@@ -27,7 +27,7 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="bg-white border-b border-[#DEDECF] text-[#2D2D24] sticky top-0 z-40 shadow-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          {/* Logo & Main Title (Requirement 3: Mini Digital Twin Rehabilitation Motion Monitor) */}
+          {/* Logo & Main Title (Requirement 3: 모션랩 · 재활 움직임 모니터) */}
           <div className="flex items-center space-x-3">
             <div className="bg-[#5A5A40] text-white p-2.5 rounded-2xl shadow-xs flex items-center justify-center">
               <Activity className="w-5 h-5 text-[#FF6321]" />
@@ -35,7 +35,7 @@ export const Header: React.FC<HeaderProps> = ({
             <div>
               <div className="flex items-center space-x-2">
                 <h1 className="text-base sm:text-lg font-bold tracking-tight text-[#2D2D24]">
-                  Mini Digital Twin Rehabilitation Motion Monitor
+                  모션랩 · 재활 움직임 모니터
                 </h1>
                 <span className="text-[10px] font-semibold bg-[#F5F5F0] text-[#5A5A40] border border-[#DEDECF] px-2 py-0.5 rounded-full">
                   MediaPipe Vision
@@ -49,7 +49,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Mode Selector & Navigation */}
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            {/* Analysis Mode Toggle [Knee Analysis] / [Shoulder Analysis] */}
+            {/* Analysis Mode Toggle [무릎 분석] / [어깨 분석] */}
             <div className="bg-[#F5F5F0] p-1 rounded-2xl border border-[#DEDECF] flex items-center text-xs font-bold">
               <button
                 onClick={() => setMajorMode('knee')}
@@ -60,7 +60,7 @@ export const Header: React.FC<HeaderProps> = ({
                 }`}
               >
                 <Activity className="w-3.5 h-3.5" />
-                <span>Knee Analysis</span>
+                <span>무릎 분석</span>
               </button>
 
               <button
@@ -72,7 +72,7 @@ export const Header: React.FC<HeaderProps> = ({
                 }`}
               >
                 <Dumbbell className="w-3.5 h-3.5" />
-                <span>Shoulder Analysis</span>
+                <span>어깨 분석</span>
               </button>
             </div>
 

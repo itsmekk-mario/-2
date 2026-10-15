@@ -1,137 +1,97 @@
-import { Landmark } from '../types';
+import { Landmark, MajorMode, ShoulderExercise } from "../types";
 
-/**
- * Generates synthetic MediaPipe 33-landmark pose arrays for simulation/demo mode.
- */
-export function generateSimulatedLandmarks(
-  timestampSec: number,
-  mode: 'gait' | 'squat' | 'free_rom'
-): Landmark[] {
-  // Base 33 landmark skeleton initialized to standing posture
-  const landmarks: Landmark[] = Array.from({ length: 33 }, () => ({
-    x: 0.5,
-    y: 0.5,
-    z: 0.0,
-    visibility: 0.95,
+export interface SimulationConfig {
+  speed: number;
+  maxAngle: number;
+  asymmetry: number;
+  trackingLoss: boolean;
+}
+export const DEFAULT_SIMULATION: SimulationConfig = {
+  speed: 1,
+  maxAngle: 90,
+  asymmetry: 0,
+  trackingLoss: false,
+};
+
+// Rigid segments in a common metric coordinate system; the requested angle is exact.
+export function simulatePose(
+  time: number,
+  mode: MajorMode,
+  exercise: ShoulderExercise,
+  config: SimulationConfig,
+) {
+  const progress = (1 - Math.cos(((time % 6) / 6) * Math.PI * 2)) / 2;
+  const world: Landmark[] = Array.from({ length: 33 }, () => ({
+    x: 0,
+    y: -0.7,
+    z: 0,
+    visibility: 0.99,
   }));
-
-  // Upper body dummy coordinates
-  landmarks[0] = { x: 0.5, y: 0.15, z: 0, visibility: 0.99 }; // Nose
-  landmarks[11] = { x: 0.42, y: 0.28, z: -0.05, visibility: 0.98 }; // L Shoulder
-  landmarks[12] = { x: 0.58, y: 0.28, z: -0.05, visibility: 0.98 }; // R Shoulder
-
-  if (mode === 'squat') {
-    // 4-second squat cycle
-    const cycleTime = timestampSec % 4.0;
-    let squatProgress = 0; // 0 = standing, 1 = deep squat
-
-    if (cycleTime < 1.8) {
-      // Descending
-      squatProgress = cycleTime / 1.8;
-    } else if (cycleTime < 2.2) {
-      // Hold at bottom
-      squatProgress = 1.0;
-    } else if (cycleTime < 3.8) {
-      // Ascending
-      squatProgress = 1.0 - (cycleTime - 2.2) / 1.6;
-    } else {
-      // Standing pause
-      squatProgress = 0.0;
-    }
-
-    // Smooth sine easing for natural motion
-    const easedProgress = (1 - Math.cos(squatProgress * Math.PI)) / 2;
-
-    // Hip positions drop as squat deepens
-    const hipY = 0.52 + easedProgress * 0.18;
-    const hipZ = -0.05 - easedProgress * 0.1;
-
-    landmarks[23] = { x: 0.45, y: hipY, z: hipZ, visibility: 0.99 }; // L Hip
-    landmarks[24] = { x: 0.55, y: hipY, z: hipZ, visibility: 0.99 }; // R Hip
-
-    // Knee positions bend outward/forward (X pushes slightly wider, Y moves down, Z pushes forward)
-    const kneeY = 0.68 + easedProgress * 0.05;
-    const kneeZ = -0.08 - easedProgress * 0.22; // Bends forward
-    const leftKneeX = 0.43 - easedProgress * 0.03;
-    const rightKneeX = 0.57 + easedProgress * 0.03;
-
-    landmarks[25] = { x: leftKneeX, y: kneeY, z: kneeZ, visibility: 0.99 }; // L Knee
-    landmarks[26] = { x: rightKneeX, y: kneeY, z: kneeZ, visibility: 0.99 }; // R Knee
-
-    // Ankle positions stay stationary on ground
-    landmarks[27] = { x: 0.44, y: 0.88, z: 0.0, visibility: 0.99 }; // L Ankle
-    landmarks[28] = { x: 0.56, y: 0.88, z: 0.0, visibility: 0.99 }; // R Ankle
-
-    // Heels and feet
-    landmarks[29] = { x: 0.44, y: 0.91, z: 0.02, visibility: 0.95 };
-    landmarks[30] = { x: 0.56, y: 0.91, z: 0.02, visibility: 0.95 };
-    landmarks[31] = { x: 0.44, y: 0.93, z: -0.08, visibility: 0.95 };
-    landmarks[32] = { x: 0.56, y: 0.93, z: -0.08, visibility: 0.95 };
-
-  } else if (mode === 'gait') {
-    // 2.4-second gait cycle (walking animation)
-    const gaitCycleSec = 2.4;
-    const cycleTime = timestampSec % gaitCycleSec;
-    const normCycle = cycleTime / gaitCycleSec; // 0.0 -> 1.0
-
-    // Sine waves for left and right leg stride (180° out of phase)
-    const leftPhase = normCycle * Math.PI * 2;
-    const rightPhase = leftPhase + Math.PI;
-
-    // Introduce an intentional "Stiff Knee" sequence every 3rd cycle to demonstrate stiff knee detection
-    const cycleCount = Math.floor(timestampSec / gaitCycleSec);
-    const isStiffDemoCycle = cycleCount % 4 === 2; // Every 4th cycle
-
-    // Left knee swing flexion (Normal ~60° = 0.35 knee height lift)
-    let leftKneeLift = Math.max(0, Math.sin(leftPhase));
-    let rightKneeLift = Math.max(0, Math.sin(rightPhase));
-
-    if (isStiffDemoCycle && leftKneeLift > 0.2) {
-      // Dampen left knee lift to simulate stiff knee gait (< 40° flexion)
-      leftKneeLift *= 0.35;
-    }
-
-    // Base Hip
-    landmarks[23] = { x: 0.46, y: 0.50, z: -0.02, visibility: 0.99 }; // L Hip
-    landmarks[24] = { x: 0.54, y: 0.50, z: -0.02, visibility: 0.99 }; // R Hip
-
-    // Knee positions moving forward & bending up
-    const leftKneeY = 0.68 - leftKneeLift * 0.12;
-    const leftKneeZ = -0.05 - Math.sin(leftPhase) * 0.15;
-
-    const rightKneeY = 0.68 - rightKneeLift * 0.12;
-    const rightKneeZ = -0.05 - Math.sin(rightPhase) * 0.15;
-
-    landmarks[25] = { x: 0.45, y: leftKneeY, z: leftKneeZ, visibility: 0.99 }; // L Knee
-    landmarks[26] = { x: 0.55, y: rightKneeY, z: rightKneeZ, visibility: 0.99 }; // R Knee
-
-    // Ankle stride motion
-    const leftAnkleZ = Math.sin(leftPhase) * 0.18;
-    const rightAnkleZ = Math.sin(rightPhase) * 0.18;
-
-    landmarks[27] = { x: 0.45, y: 0.88, z: leftAnkleZ, visibility: 0.99 }; // L Ankle
-    landmarks[28] = { x: 0.55, y: 0.88, z: rightAnkleZ, visibility: 0.99 }; // R Ankle
-
-    landmarks[29] = { x: 0.45, y: 0.91, z: leftAnkleZ + 0.02, visibility: 0.95 };
-    landmarks[30] = { x: 0.55, y: 0.91, z: rightAnkleZ + 0.02, visibility: 0.95 };
-    landmarks[31] = { x: 0.45, y: 0.92, z: leftAnkleZ - 0.08, visibility: 0.95 };
-    landmarks[32] = { x: 0.55, y: 0.92, z: rightAnkleZ - 0.08, visibility: 0.95 };
-
-  } else {
-    // Free ROM exercise mode (alternating leg lifts)
-    const t = timestampSec * 1.5;
-    const leftLift = Math.max(0, Math.sin(t));
-    const rightLift = Math.max(0, Math.sin(t + Math.PI));
-
-    landmarks[23] = { x: 0.45, y: 0.50, z: 0, visibility: 0.99 };
-    landmarks[24] = { x: 0.55, y: 0.50, z: 0, visibility: 0.99 };
-
-    landmarks[25] = { x: 0.44, y: 0.68 - leftLift * 0.18, z: -0.1 - leftLift * 0.2, visibility: 0.99 };
-    landmarks[26] = { x: 0.56, y: 0.68 - rightLift * 0.18, z: -0.1 - rightLift * 0.2, visibility: 0.99 };
-
-    landmarks[27] = { x: 0.44, y: 0.88, z: 0, visibility: 0.99 };
-    landmarks[28] = { x: 0.56, y: 0.88, z: 0, visibility: 0.99 };
+  const point = (x: number, y: number, z = 0): Landmark => ({
+    x,
+    y,
+    z,
+    visibility: config.trackingLoss ? 0.1 : 0.99,
+  });
+  world[0] = point(0, -0.85);
+  for (const [side, sign] of [
+    [0, -1],
+    [1, 1],
+  ]) {
+    const x = sign * 0.18;
+    const knee =
+      ((mode === "knee"
+        ? Math.max(0, config.maxAngle - side * config.asymmetry) * progress
+        : 0) *
+        Math.PI) /
+      180;
+    const hipY = -0.4 * Math.cos(knee / 2) * 2;
+    world[27 + side] = point(x, 0);
+    world[25 + side] = point(
+      x,
+      -0.4 * Math.cos(knee / 2),
+      -0.4 * Math.sin(knee / 2),
+    );
+    world[23 + side] = point(x, hipY);
+    world[11 + side] = point(x, hipY - 0.5);
+    const arm =
+      ((mode === "shoulder"
+        ? Math.max(0, config.maxAngle - side * config.asymmetry) * progress
+        : 5) *
+        Math.PI) /
+      180;
+    const dx = exercise === "abduction" ? sign * Math.sin(arm) : 0;
+    const dz = exercise === "flexion" ? -Math.sin(arm) : 0;
+    world[13 + side] = point(
+      x + dx * 0.28,
+      hipY - 0.5 + Math.cos(arm) * 0.28,
+      dz * 0.28,
+    );
+    world[15 + side] = point(
+      x + dx * 0.52,
+      hipY - 0.5 + Math.cos(arm) * 0.52,
+      dz * 0.52,
+    );
   }
+  world[0] = point(0, world[23].y - 0.72);
+  const image = world.map((p) => ({
+    ...p,
+    x: 0.5 + (p.x + p.z * 0.45) * 0.46,
+    y: 0.92 + p.y * 0.46,
+  }));
+  return {
+    poseLandmarks: image,
+    poseWorldLandmarks: world,
+    expectedLeft: config.maxAngle * progress,
+    expectedRight: Math.max(0, config.maxAngle - config.asymmetry) * progress,
+  };
+}
 
-  return landmarks;
+// Kept for existing consumers.
+export function generateSimulatedLandmarks(
+  time: number,
+  mode: "gait" | "squat" | "free_rom",
+) {
+  return simulatePose(time, "knee", "abduction", DEFAULT_SIMULATION)
+    .poseLandmarks;
 }

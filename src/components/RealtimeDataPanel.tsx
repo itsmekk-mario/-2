@@ -82,7 +82,7 @@ export const RealtimeDataPanel: React.FC<RealtimeDataPanelProps> = ({
   return (
     <div className="space-y-3">
       {/* 8 Data Cards Grid (Requirement 3) */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {/* Card 1: LEFT JOINT */}
         <div
           className={`border rounded-2xl p-3 shadow-xs flex flex-col justify-between transition-all ${
@@ -103,7 +103,7 @@ export const RealtimeDataPanel: React.FC<RealtimeDataPanelProps> = ({
           </div>
           <div className="my-1.5">
             <div className="text-xl sm:text-2xl font-serif font-black text-[#2D2D24]">
-              {leftAngle.toFixed(1)}°
+              {angles ? `${leftAngle.toFixed(1)}°` : '—'}
             </div>
             <p className="text-[10px] text-[#8A8A70]">
               Max: <strong className="text-[#5A5A40]">{sessionMaxROM.leftMax.toFixed(1)}°</strong>
@@ -137,7 +137,7 @@ export const RealtimeDataPanel: React.FC<RealtimeDataPanelProps> = ({
           </div>
           <div className="my-1.5">
             <div className="text-xl sm:text-2xl font-serif font-black text-[#2D2D24]">
-              {rightAngle.toFixed(1)}°
+              {angles ? `${rightAngle.toFixed(1)}°` : '—'}
             </div>
             <p className="text-[10px] text-[#8A8A70]">
               Max: <strong className="text-[#5A5A40]">{sessionMaxROM.rightMax.toFixed(1)}°</strong>
@@ -161,19 +161,19 @@ export const RealtimeDataPanel: React.FC<RealtimeDataPanelProps> = ({
           </div>
           <div className="my-1.5">
             <div className="text-xs font-semibold text-[#2D2D24]">
-              목표: {shoulderConfig.targetROM ? `${shoulderConfig.targetROM}°` : '미설정'}
+              목표: {majorMode === 'knee' ? '굴곡 60°' : shoulderConfig.targetROM ? `${shoulderConfig.targetROM}°` : '미설정'}
             </div>
             <div className="text-[10px] text-[#8A8A70] mt-0.5">
-              제한: {shoulderConfig.maximumAllowedROM ? `${shoulderConfig.maximumAllowedROM}°` : '미설정'}
+              제한: {majorMode === 'knee' ? '미설정' : shoulderConfig.maximumAllowedROM ? `${shoulderConfig.maximumAllowedROM}°` : '미설정'}
             </div>
           </div>
           <div className="text-[9px] text-[#8A8A70] truncate">
-            {shoulderConfig.maximumAllowedROM && Math.max(leftAngle, rightAngle) > shoulderConfig.maximumAllowedROM ? (
+            {majorMode === 'shoulder' && shoulderConfig.maximumAllowedROM && Math.max(leftAngle, rightAngle) > shoulderConfig.maximumAllowedROM ? (
               <span className="text-[#D9381E] font-bold">제한각 초과</span>
-            ) : shoulderConfig.targetROM && Math.max(leftAngle, rightAngle) >= shoulderConfig.targetROM ? (
+            ) : majorMode === 'shoulder' && shoulderConfig.targetROM && Math.max(leftAngle, rightAngle) >= shoulderConfig.targetROM ? (
               <span className="text-emerald-600 font-bold">목표 도달</span>
             ) : (
-              '정상 범위 내'
+              angles ? '움직임 측정 중' : '측정 대기'
             )}
           </div>
         </div>
@@ -233,7 +233,7 @@ export const RealtimeDataPanel: React.FC<RealtimeDataPanelProps> = ({
             </p>
           </div>
           <div className="w-full bg-[#F5F5F0] h-1.5 rounded-full overflow-hidden">
-            <div className="bg-[#5A5A40] h-full w-2/3" />
+            <div className="bg-[#5A5A40] h-full" style={{ width: `${({STANDING: 0, BENDING: 40, BOTTOM: 100, RISING: 60, REST: 0, RAISING: 40, TARGET: 100, LOWERING: 60}[activeState])}%` }} />
           </div>
         </div>
 
@@ -268,12 +268,12 @@ export const RealtimeDataPanel: React.FC<RealtimeDataPanelProps> = ({
           </div>
           <div className="my-1.5">
             <div className="text-lg sm:text-xl font-serif font-bold text-[#2D2D24]">
-              {asymmetry.toFixed(1)}°
+              {angles ? `${asymmetry.toFixed(1)}°` : '—'}
             </div>
             <p className="text-[10px] text-[#8A8A70]">좌우 측정값 차이</p>
           </div>
           <div className="text-[9px] text-[#8A8A70]">
-            {asymmetry <= 10 ? '대칭 양호' : '비대칭 감지'}
+            {!angles ? '측정 대기' : asymmetry <= 10 ? '대칭 양호' : '비대칭 감지'}
           </div>
         </div>
 
@@ -286,7 +286,7 @@ export const RealtimeDataPanel: React.FC<RealtimeDataPanelProps> = ({
             <Activity className="w-3.5 h-3.5 text-[#FF6321]" />
           </div>
           <div className="my-1">
-            <p className="text-xs font-semibold text-[#2D2D24] leading-tight line-clamp-2">
+            <p className="text-xs font-semibold text-[#2D2D24] leading-tight ">
               {feedbackMessage}
             </p>
           </div>

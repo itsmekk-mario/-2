@@ -117,7 +117,7 @@ export function drawPose(
   const rAnkle = toPx(landmarks.rightAnkle);
 
   // 1. Torso Alignment (Shoulders to Hips)
-  const trunkColor = torsoCompensated ? '#D9381E' : 'rgba(90, 90, 64, 0.6)';
+  const trunkColor = torsoCompensated ? '#D9381E' : 'rgba(222, 222, 207, 0.7)';
   const trunkWidth = torsoCompensated ? 4 : 2.5;
 
   drawBone(lShoulder, rShoulder, trunkColor, trunkWidth);

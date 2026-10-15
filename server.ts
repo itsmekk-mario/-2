@@ -22,63 +22,57 @@ app.post("/api/rehab-feedback", async (req, res) => {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return res.status(400).json({
-        error: "GEMINI_API_KEY가 설정되지 않았습니다. 기본 알고리즘 분석 결과만 표시합니다.",
+        error:
+          "GEMINI_API_KEY가 설정되지 않았습니다. 기본 알고리즘 분석 결과만 표시합니다.",
       });
     }
 
-    const { mode, leftMaxFlexion, rightMaxFlexion, leftMinExtension, rightMinExtension, asymmetry, stiffKneeCount, repCount, durationSec } = req.body;
-
+    const {
+      mode,
+      source,
+      durationSec,
+      frames,
+      leftMaxROM,
+      rightMaxROM,
+      asymmetry,
+      repCount,
+    } = req.body;
+    if (
+      !["knee", "shoulder"].includes(mode) ||
+      !["realtime_camera", "video_file", "pose_simulator"].includes(source) ||
+      ![
+        durationSec,
+        frames,
+        leftMaxROM,
+        rightMaxROM,
+        asymmetry,
+        repCount,
+      ].every((v) => typeof v === "number" && Number.isFinite(v) && v >= 0) ||
+      frames < 1 ||
+      leftMaxROM > 180 ||
+      rightMaxROM > 180 ||
+      asymmetry > 180
+    ) {
+      return res.status(400).json({ error: "유효한 측정 통계가 필요합니다." });
+    }
     const ai = new GoogleGenAI({ apiKey });
-
-    const prompt = `
-너는 물리치료사 및 하체 재활 보행 분석 전문가(Physical Therapist & Biomechanics Specialist)이다.
-다음 환자/사용자의 웹캠 기반 MediaPipe 하체 포즈 측정 데이터를 분석하여 전문적이고 용기를 북돋는 재활 분석 보고서를 한국어로 작성해라.
-
-[측정 요약 데이터]
-- 측정 모드: ${mode === 'gait' ? '보행 분석 (Gait Analysis)' : mode === 'squat' ? '스쿼트/재활 운동 (Squat Training)' : '자유 ROM 관절 가동범위 측정'}
-- 측정 시간: ${durationSec || 0}초
-- 왼쪽 무릎 최대 굴곡각 (Max Flexion): ${leftMaxFlexion?.toFixed(1) || 0}°
-- 오른쪽 무릎 최대 굴곡각 (Max Flexion): ${rightMaxFlexion?.toFixed(1) || 0}°
-- 왼쪽 무릎 최소 신전각 (Min Extension): ${leftMinExtension?.toFixed(1) || 0}°
-- 오른쪽 무릎 최소 신전각 (Min Extension): ${rightMinExtension?.toFixed(1) || 0}°
-- 좌우 무릎 각도 비대칭도 (Asymmetry Index): ${asymmetry?.toFixed(1) || 0}°
-- 뻣뻣한 무릎 보행(Stiff Knee Gait) 감지 횟수: ${stiffKneeCount || 0}회
-- 스쿼트/운동 완수 횟수: ${repCount || 0}회
-
-[임상적 목표 가동범위 기준]
-- 슬관절 전치환술(TKA) / 보행 재활 목표: 신전 0°, 굴곡 120° 이상
-- 정상 보행 유각기(Swing Phase) 무릎 굴곡: 약 62°
-- 뻣뻣한 무릎 보행(Stiff Knee Gait): 유각기 굴곡 45° 미만 (슬괵근 경직, 하퇴삼두근 약화, 뇌성마비 등 원인)
-
-작성 형식:
-1. 종합 평가 (2-3문장 요약)
-2. 관절 가동범위(ROM) 및 좌우 대칭성 분석
-3. 뻣뻣한 무릎 보행/자세 불균형에 대한 원인 추정 및 주의사항
-4. 맞춤형 재활/교정 운동 추천 3가지 (단계별 안내)
-
-답변은 마크다운 형식으로 명확하고 친절하며 임상적으로 신뢰성 있게 작성하세요.
-`;
-
-    let report = "";
-    try {
-      const response = await ai.models.generateContent({
-        model: "gemini-3.8-flash",
-        contents: prompt,
-      });
-      report = response.text || "분석 보고서를 생성하지 못했습니다.";
-    } catch (modelErr: any) {
-      console.warn("Primary model error, attempting fallback:", modelErr);
-      const fallbackResponse = await ai.models.generateContent({
-        model: "gemini-3.6-flash",
-        contents: prompt,
-      });
-      report = fallbackResponse.text || "분석 보고서를 생성하지 못했습니다.";
-    }
-
+    const prompt = `웹캠 기반 관절 움직임 모니터의 관찰 내용을 한국어로 간결하게 요약하세요.
+데이터는 ${source === "pose_simulator" ? "합성 시뮬레이션이며 실제 신체 측정이 아닙니다" : "MediaPipe 3D 관절 추정값이며 실측과 오차가 있습니다"}.
+관절: ${mode === "knee" ? "무릎" : "어깨"}, 유효 시간: ${durationSec}초, 프레임: ${frames},
+왼쪽 최대: ${leftMaxROM}도, 오른쪽 최대: ${rightMaxROM}도, 평균 좌우 차이: ${asymmetry}도, 완료 반복: ${repCount}회.
+제공된 통계만 사용하세요. 측정하지 않은 보행, 신전 최소값, 손가락 값, 질환 원인 등을 추론하거나 만들어내지 마세요.
+진단이나 개인별 운동 처방 대신 관찰 요약과 촬영 자세 확인 방법을 제시하세요. 고정된 임상 목표각을 강요하지 마세요.`;
+    const response = await ai.models.generateContent({
+      model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+      contents: prompt,
+    });
+    const report = response.text || "측정 요약을 생성하지 못했습니다.";
     res.json({ report });
   } catch (error: any) {
     console.error("Gemini Rehab Feedback error:", error);
-    res.status(500).json({ error: error.message || "서버 오류가 발생했습니다." });
+    res
+      .status(500)
+      .json({ error: error.message || "서버 오류가 발생했습니다." });
   }
 });
 
@@ -99,7 +93,9 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`MediaPipe Knee Twin Server running on http://localhost:${PORT}`);
+    console.log(
+      `MediaPipe Knee Twin Server running on http://localhost:${PORT}`,
+    );
   });
 }
 
